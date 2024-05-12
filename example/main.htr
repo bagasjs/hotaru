@@ -1,0 +1,9 @@
+var hello = 34;
+var world = 35;
+
+hello = hello + world;
+
+world = 0;
+while(world < 10) {
+    world = world + 1;
+}
