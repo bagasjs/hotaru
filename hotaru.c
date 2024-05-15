@@ -40,6 +40,41 @@ void hlog_message(hLogLevel level, const char *fmt, ...)
     }
 }
 
+hVarBinding *hscope_append(hScope *scope, hVarBinding binding, Arena *arena)
+{
+    UT_ASSERT(scope);
+    UT_ASSERT(arena);
+
+    if(scope->count + 1 > scope->capacity) {
+        ut_size new_capacity = scope->capacity * 2;
+        if(new_capacity == 0) new_capacity = 32;
+
+        hVarBinding *new_items = arena_malloc(arena, sizeof(hVarBinding)*new_capacity);
+        ut_memcpy(new_items, scope->items, scope->capacity * sizeof(binding));
+        scope->capacity = new_capacity;
+        scope->items = new_items; // No need to deallocate the old items since this is in arena
+    }
+
+    hVarBinding *res = &scope->items[scope->count];
+    *res = binding;
+    scope->count += 1;
+    return res;
+}
+
+hVarBinding *hscope_find(const hScope *scope, StringView name)
+{
+    hVarBinding *res = UT_NULL;
+    while(scope != UT_NULL && res == UT_NULL) {
+        for(ut_size i = 0; i < scope->count; ++i) {
+            hVarBinding *cur = &scope->items[i];
+            if(sv_eq(cur->name, name)) 
+                res = cur;
+        }
+        scope = scope->prev;
+    }
+    return res;
+}
+
 void hstate_init(hState *state)
 {
     UT_ASSERT(state);
@@ -56,6 +91,12 @@ void hstate_init(hState *state)
 
     state->vsp = 0;
     state->vss = 0;
+}
+
+void hstate_deinit(hState *state)
+{
+    arena_free(&state->arena);
+    hvm_module_deinit(&state->mod);
 }
 
 hResult hstate_compile_expr(hState *state, const hExpr *expr)
@@ -208,7 +249,7 @@ hResult hstate_compile_stmt(hState *state, const hStmt *stmt)
             } break;
         default:
             {
-                UT_ASSERT(0 && "Unreachable expr in hstate_exec_stmt()");
+                UT_ASSERT(0 && "Unreachable stmt in hstate_exec_stmt()");
             } break;
     }
 
@@ -271,37 +312,3 @@ hResult hstate_exec_stmt(hState *state, const hStmt *stmt)
     return HRES_OK;
 }
 
-hVarBinding *hscope_append(hScope *scope, hVarBinding binding, Arena *arena)
-{
-    UT_ASSERT(scope);
-    UT_ASSERT(arena);
-
-    if(scope->count + 1 > scope->capacity) {
-        ut_size new_capacity = scope->capacity * 2;
-        if(new_capacity == 0) new_capacity = 32;
-
-        hVarBinding *new_items = arena_malloc(arena, sizeof(hVarBinding)*new_capacity);
-        ut_memcpy(new_items, scope->items, scope->capacity * sizeof(binding));
-        scope->capacity = new_capacity;
-        scope->items = new_items; // No need to deallocate the old items since this is in arena
-    }
-
-    hVarBinding *res = &scope->items[scope->count];
-    *res = binding;
-    scope->count += 1;
-    return res;
-}
-
-hVarBinding *hscope_find(const hScope *scope, StringView name)
-{
-    hVarBinding *res = UT_NULL;
-    while(scope != UT_NULL && res == UT_NULL) {
-        for(ut_size i = 0; i < scope->count; ++i) {
-            hVarBinding *cur = &scope->items[i];
-            if(sv_eq(cur->name, name)) 
-                res = cur;
-        }
-        scope = scope->prev;
-    }
-    return res;
-}

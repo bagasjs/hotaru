@@ -133,9 +133,14 @@ hVarBinding *hscope_find(const hScope *scope, StringView name);
 hVarBinding *hscope_append(hScope *scope, hVarBinding binding, Arena *arena);
 
 void hstate_init(hState *state);
+void hstate_deinit(hState *state);
 hResult hstate_exec_expr(hState *state, const hExpr *expr);
 hResult hstate_exec_stmt(hState *state, const hStmt *stmt);
 hResult hstate_exec_source(hState *state, const char *source);
 hResult hstate_exec_file(hState *state, const char *filepath);
+
+hResult hstate_compile_expr(hState *state, const hExpr *expr);
+hResult hstate_compile_stmt(hState *state, const hStmt *stmt);
+hResult hstate_compile_source(hState *state, const char *source);
 
 #endif // HOTARU_H_

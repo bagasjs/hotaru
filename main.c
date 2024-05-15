@@ -1,83 +1,87 @@
 #include "hotaru.h"
 #include "hvm.h"
+#include "utils.h"
+#include <stdio.h>
 
-int main(void)
+void usage(FILE *f, const char *program)
 {
-    hState state;
-    hstate_init(&state);
-
-    hstate_exec_source(&state, "var hello = 35;");
-    hvm_dump(&state.vm);
-
-    hstate_exec_source(&state, "var world = 34;");
-    hvm_dump(&state.vm);
-
-    hstate_exec_source(&state, "hello = 489 - hello + world;");
-    hvm_dump(&state.vm);
-
-    hstate_exec_source(&state, "var x = 0;");
-    hstate_exec_source(&state, "while(x < 10) { x = x + 1; }");
-    hvm_dump(&state.vm);
-
-    // hstate_exec_source(&state, "if (hello == 420) { world = 69; }");
-    // hvm_dump(&state.vm);
-
-    // hstate_exec_source(&state, "func pow(a, b) { a * b; }");
-    // hvm_dump(&state.vm);
-
-    // This will be the standard library of hotaru
-    // hstate_exec_source(&state, "bytes_create()");
-    // hstate_exec_source(&state, "bytes_destroy()");
-    // hstate_exec_source(&state, "load_bytes_from_file()");
-    // hstate_exec_source(&state, "save_bytes_to_file()");
-    // hstate_exec_source(&state, "bytes_is_little_endian()");
-    // hstate_exec_source(&state, "bytes_push()");
-    // hstate_exec_source(&state, "bytes_shift()");
-    // hstate_exec_source(&state, "bytes_load_int()");
-    // hstate_exec_source(&state, "bytes_push_int()");
-    // hstate_exec_source(&state, "bytes_load_float()");
-    // hstate_exec_source(&state, "bytes_push_float()");
-    // hstate_exec_source(&state, "print_bytes_as_string()");
-    // hstate_exec_source(&state, "print_bytes_as_hex()");
-    // hstate_exec_source(&state, "print_int()");
-    // hstate_exec_source(&state, "print_float()");
+    fprintf(f, "USAGE: %s SUBCOMMAND <ARGS> [FLAGS]\n", program);
+    fprintf(f, "Available subcommand:\n");
+    fprintf(f, "    com <source.ht> -o <output.hbc>\n");
+    fprintf(f, "    run <source.ht>\n");
+    fprintf(f, "    help\n");
 }
 
-void test(void)
+typedef struct Args {
+    int count;
+    const char **items;
+} Args;
+
+const char *shift_args(Args *args, const char *on_empty_message)
 {
+    if(args->count <= 0) {
+        fprintf(stderr, "ERROR: %s\n", on_empty_message);
+        exit(EXIT_FAILURE);
+        return NULL;
+    }
+    const char *result = args->items[0];
+    args->items += 1;
+    args->count -= 1;
+    return result;
+}
+
+int main(int argc, const char **argv)
+{
+    Args args = {argc, argv};
+    const char *program_name = shift_args(&args, "Unreachable");
+    StringView subcommand = sv_from_cstr(shift_args(&args, "Please provide a subcommand"));
+    ut_bool compilation_mode = ut_false;
+
+    if(sv_eq(subcommand, SV("help"))) {
+        usage(stdout, program_name);
+        return 0;
+    } else if(sv_eq(subcommand, SV("com"))) {
+        compilation_mode = ut_true;
+    } else if(sv_eq(subcommand, SV("run"))) {
+        compilation_mode = ut_false;
+    } else {
+        fprintf(stderr, "ERROR: Invalid subcommand %s\n", subcommand.data);
+        usage(stderr, program_name);
+        return -1;
+    }
+
+    const char *source_file = shift_args(&args, "Provide the source file path");
+    const char *output_file = "output.hbc";
+
+    if(compilation_mode && args.count > 0) {
+        StringView flag = sv_from_cstr(shift_args(&args, "Unreachable"));
+        if(!sv_eq(flag, SV("-o"))) {
+            fprintf(stderr, "ERROR: Invalid flag %s\n", flag.data);
+            usage(stderr, program_name);
+            return -1;
+        }
+        output_file = shift_args(&args, "Expecting output file path");
+    }
+
+    Arena a = {0};
     hState state;
     hstate_init(&state);
 
-    hExpr a;
-    hExpr b;
-    hExpr c;
+    char *source = load_file_text_with_arena(source_file, &a);
+    if(!source) {
+        fprintf(stderr, "ERROR: Could not load file %s\n", argv[1]);
+        usage(stderr, argv[0]);
+        return -1;
+    }
 
-    a.type = HEXPR_INT_LITERAL;
-    a.as.int_literal = 34;
-
-    b.type = HEXPR_INT_LITERAL;
-    b.as.int_literal = 35;
-
-    c.type = HEXPR_BINOP;
-    c.as.binop.left = &a;
-    c.as.binop.right = &b;
-
-    hStmt stmt;
-
-    stmt.type = HSTMT_VAR_INIT;
-    stmt.as.var_init.name = SV("hello");
-    stmt.as.var_init.value = a;
-    hstate_exec_stmt(&state, &stmt);
-
-    stmt.type = HSTMT_VAR_INIT;
-    stmt.as.var_init.name = SV("world");
-    stmt.as.var_init.value = b;
-    hstate_exec_stmt(&state, &stmt);
-
-    a.type = HEXPR_VAR_READ;
-    a.as.var_read.name = SV("hello");
-    stmt.type = HSTMT_VAR_ASSIGN;
-    stmt.as.var_assign.name = SV("world");
-    stmt.as.var_assign.value = c;
-    hstate_exec_stmt(&state, &stmt);
+    if(compilation_mode) {
+        hstate_compile_source(&state, source);
+        hvm_module_save_to_file(state.mod, output_file);
+    } else {
+        hstate_exec_source(&state, source);
+        hvm_dump(&state.vm);
+    }
+    hstate_deinit(&state);
+    arena_free(&a);
+    return 0;
 }

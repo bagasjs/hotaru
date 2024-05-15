@@ -97,10 +97,6 @@ typedef enum HVM_InstType {
     HVM_INST_JMP,
     HVM_INST_JZ,
     HVM_INST_JN,
-    HVM_INST_JLT,
-    HVM_INST_JGT,
-    HVM_INST_JLE,
-    HVM_INST_JGE,
 
     COUNT_HVM_INSTS,
 } HVM_InstType;

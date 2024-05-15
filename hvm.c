@@ -45,10 +45,6 @@ static HVM_InstInfo _inst_infos[COUNT_HVM_INSTS] = {
     [HVM_INST_JMP] = { .type = HVM_INST_JMP, .name = "jmp", .has_operand = ut_false, .min_sp = 0, },
     [HVM_INST_JZ] = { .type = HVM_INST_JZ, .name = "jz", .has_operand = ut_false, .min_sp = 1, },
     [HVM_INST_JN] = { .type = HVM_INST_JN, .name = "jn", .has_operand = ut_false, .min_sp = 1, },
-    [HVM_INST_JLT] = { .type = HVM_INST_JLT, .name = "jlt", .has_operand = ut_false, .min_sp = 1, },
-    [HVM_INST_JGT] = { .type = HVM_INST_JGT, .name = "jgt", .has_operand = ut_false, .min_sp = 1, },
-    [HVM_INST_JLE] = { .type = HVM_INST_JLE, .name = "jle", .has_operand = ut_false, .min_sp = 1, },
-    [HVM_INST_JGE] = { .type = HVM_INST_JGE, .name = "jge", .has_operand = ut_false, .min_sp = 1, },
 
 };
 
@@ -174,31 +170,6 @@ HVM_Trap hvm_exec(HVM *vm, HVM_Inst inst)
                     vm->pc = inst.op.as_u64;
                 vm->sp -= 1;
             } break;
-        case HVM_INST_JLT:
-            {
-                if(HVM_X(vm).as_i64 < 0) 
-                    vm->pc = inst.op.as_u64;
-                vm->sp -= 1;
-            } break;
-        case HVM_INST_JGT:
-            {
-                if(HVM_X(vm).as_i64 > 0) 
-                    vm->pc = inst.op.as_u64;
-                vm->sp -= 1;
-            } break;
-        case HVM_INST_JLE:
-            {
-                if(HVM_X(vm).as_i64 <= 0) 
-                    vm->pc = inst.op.as_u64;
-                vm->sp -= 1;
-            } break;
-        case HVM_INST_JGE:
-            {
-                if(HVM_X(vm).as_i64 >= 0) 
-                    vm->pc = inst.op.as_u64;
-                vm->sp -= 1;
-            } break;
-
 
         case HVM_INST_ADD:
             {
@@ -289,6 +260,7 @@ void hvm_module_init(HVM_Module *module)
     module->items = UT_NULL;
     module->count = 0;
     module->capacity = 0;
+    buffer_init(&module->static_data);
 }
 
 void hvm_module_deinit(HVM_Module *module)
@@ -425,6 +397,6 @@ ut_bool hvm_module_load_from_file(HVM_Module *module, const char *file_path, Are
     buffer_append_with_arena(&module->static_data, static_data_buffer.data, static_data_buffer.count, a);
 
     arena_free(&local);
-    return ut_false;
+    return ut_true;
 }
 

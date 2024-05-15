@@ -184,6 +184,7 @@ UTDEF BufferView buffer_slice(Buffer buf, ut_size start, ut_size size);
 #ifndef UTILS_WITHOUT_STDIO
 UTDEF ut_bool buffer_save_to_file(const Buffer buf, const char *file_path);
 UTDEF ut_bool buffer_load_from_file_with_arena(Buffer *buf, const char *file_path, Arena *a);
+UTDEF char *load_file_text_with_arena(const char *file_path, Arena *a);
 #endif
 
 #endif // UTILS_H_
@@ -483,6 +484,30 @@ ut_bool buffer_load_from_file_with_arena(Buffer *buf, const char *file_path, Are
     buf->capacity = fsz;
     return ut_true;
 }
+
+char *load_file_text_with_arena(const char *file_path, Arena *a)
+{
+    FILE *f = fopen(file_path, "r");
+    if(!f) return UT_NULL;
+    ut_size fsz;
+    fseek(f, 0, SEEK_END);
+    fsz = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    void *data = arena_malloc(a, fsz);
+    if(!data) {
+        fclose(f);
+        return UT_NULL;
+    }
+
+    ut_size rsz = fread(data, 1, fsz, f);
+    if(rsz != fsz) {
+        fclose(f);
+        return UT_NULL;
+    }
+
+    return data;
+}
+
 #endif
 
 #endif // UTILS_IMPLEMENTATION

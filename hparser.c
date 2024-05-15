@@ -1,4 +1,5 @@
 #include "hotaru.h"
+#include "hvm.h"
 #include "utils.h"
 #include <stdio.h>
 
@@ -6,6 +7,7 @@
 
 typedef enum hTokenType {
     HTOKEN_NONE = 0,
+    HTOKEN_EOF,
     HTOKEN_IDENTIFIER,
     HTOKEN_INT_LITERAL,
     HTOKEN_FLOAT_LITERAL,
@@ -163,6 +165,8 @@ ut_bool hlexer_cache_next(hLexer *lex)
     switch(lex->cc) {
         case '\0':
             {
+                hlexer_cache_extend(lex, HTOKEN_EOF, sv_slice(lex->source, lex->i, lex->i + 1));
+                hlexer_advance(lex);
                 return ut_false;
             } break;
         case '{':
@@ -426,11 +430,12 @@ hBlock hparse_block(Arena *a, hLexer *lex);
 hStmt hparse_stmt(Arena *a, hLexer *lex)
 {
     hToken token;
-    hStmt res;
+    hStmt res = {0};
     ut_memset(&res, 0, sizeof(res));
 
     if(!hlexer_peek(lex, &token, 0)) {
-        hlog_message(HLOG_FATAL, "There's no token to parse a statement on");
+        res.type = HSTMT_NONE;
+        return res;
     }
 
     switch(token.type) {
@@ -517,10 +522,12 @@ hResult hstate_exec_source(hState *state, const char *source)
     hLexer lex;
     Arena a;
     ut_memset(&a, 0, sizeof(a));
-
     hlexer_init(&lex, source);
     hStmt stmt = hparse_stmt(&a, &lex);
-    hstate_exec_stmt(state, &stmt);
+    while(stmt.type != HSTMT_NONE) {
+        hstate_exec_stmt(state, &stmt);
+        stmt = hparse_stmt(&a, &lex);
+    }
     return HRES_OK;
 }
 
@@ -528,5 +535,23 @@ hResult hstate_exec_file(hState *state, const char *filepath)
 {
     UT_UNUSED(state);
     UT_UNUSED(filepath);
+    return HRES_OK;
+}
+
+hResult hstate_compile_source(hState *state, const char *source)
+{
+    UT_ASSERT(state);
+    UT_ASSERT(source);
+
+    hLexer lex;
+    Arena a;
+    ut_memset(&a, 0, sizeof(a));
+    hlexer_init(&lex, source);
+    hStmt stmt = {0};
+    do {
+        hStmt stmt = hparse_stmt(&a, &lex);
+        hstate_compile_stmt(state, &stmt);
+    } while(stmt.type != HSTMT_NONE);
+    arena_free(&a);
     return HRES_OK;
 }
