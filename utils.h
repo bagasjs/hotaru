@@ -37,6 +37,10 @@
 #define UT_NULLABLE
 #endif
 
+#ifndef UT_ARRAY_LEN
+#define UT_ARRAY_LEN(xs) (sizeof(xs)/sizeof(*xs))
+#endif
+
 #ifndef UT_SWAP
 #define UT_SWAP(T, a, b) \
     do { \
@@ -147,6 +151,39 @@ typedef struct StringView {
     const char *data;
     ut_size count;
 } StringView;
+
+#define arena_da_append(a, da, item) \
+    do { \
+        if((da)->count + 1 > (da)->capacity) { \
+            ut_size per_item_size = sizeof(*(da)->items); \
+            ut_size new_capacity = (da)->capacity * 2; \
+            if(new_capacity == 0) new_capacity = 8; \
+            void *new_items = arena_malloc((a), new_capacity * per_item_size); \
+            UT_ASSERT(new_items && "Buy more RAM LOL!"); \
+            if((da)->items) ut_memcpy(new_items, (da)->items, \
+                    (da)->count * per_item_size); \
+            (da)->items = new_items; \
+            (da)->capacity = new_capacity; \
+        } \
+        (da)->items[(da)->count++] = (item); \
+    } while(0)
+
+#define arena_da_append_many(a, da, new_items, new_items_count) \
+    do { \
+        ut_size per_item_size = sizeof(*(da)->items); \
+        if((da)->count + (new_items_count) > (da)->capacity) { \
+            ut_size new_capacity = (da)->capacity * 2 + (new_items_count); \
+            if(new_capacity == 0) new_capacity = (new_items_count) + 8; \
+            void *new_items2 = arena_malloc((a), new_capacity * per_item_size); \
+            UT_ASSERT(new_items2 && "Buy more RAM LOL!"); \
+            if((da)->items) ut_memcpy(new_items2, (da)->items, \
+                    (da)->count * per_item_size); \
+            (da)->items = new_items2; \
+            (da)->capacity = new_capacity; \
+        } \
+        ut_memcpy((da)->items + (da)->count, (new_items), (new_items_count)*per_item_size); \
+        (da)->count += (new_items_count); \
+    } while(0)
 
 #define SV_STATIC(s) { .data = (s), .count = ((sizeof(s) - 1)/sizeof(char))  }
 #define SV(s) (StringView){ .data = (s), .count = ((sizeof(s) - 1)/sizeof(char)) }

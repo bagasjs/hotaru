@@ -1,49 +1,27 @@
-#include "hotaru.h"
-#include "hvm.h"
+#include "utils.h"
+#include <stdint.h>
 #include <stdio.h>
 
-void make_module(void);
+typedef struct Numbers {
+    int *items;
+    uint32_t count;
+    uint32_t capacity;
+} Numbers;
 
 int main(void)
 {
+    Arena a;
+    Numbers nums;
+    ut_memset(&a, 0, sizeof(a));
+    ut_memset(&nums, 0, sizeof(nums));
 
-    hState state;
-    hstate_init(&state);
+    arena_da_append(&a, &nums, 69);
 
-    hstate_exec_source(&state, "var hello = 35;");
-    hvm_dump(&state.vm);
+    int nums2[] = { 129,2,1,23,133123,3123,124 };
+    arena_da_append_many(&a, &nums, nums2, UT_ARRAY_LEN(nums2));
 
-    hstate_exec_source(&state, "var world = 34;");
-    hvm_dump(&state.vm);
-
-    hstate_exec_source(&state, "hello = 489 - hello + world;");
-    hvm_dump(&state.vm);
-
-    hstate_exec_source(&state, "var x = 0;");
-    hstate_exec_source(&state, "while(x < 10) { x = x + 1; }");
-    hvm_dump(&state.vm);
-
-    // hstate_exec_source(&state, "if (hello == 420) { world = 69; }");
-    // hvm_dump(&state.vm);
-
-    // hstate_exec_source(&state, "func pow(a, b) { a * b; }");
-    // hvm_dump(&state.vm);
-
-    // This will be the standard library of hotaru
-    // hstate_exec_source(&state, "bytes_create()");
-    // hstate_exec_source(&state, "bytes_destroy()");
-    // hstate_exec_source(&state, "load_bytes_from_file()");
-    // hstate_exec_source(&state, "save_bytes_to_file()");
-    // hstate_exec_source(&state, "bytes_is_little_endian()");
-    // hstate_exec_source(&state, "bytes_push()");
-    // hstate_exec_source(&state, "bytes_shift()");
-    // hstate_exec_source(&state, "bytes_load_int()");
-    // hstate_exec_source(&state, "bytes_push_int()");
-    // hstate_exec_source(&state, "bytes_load_float()");
-    // hstate_exec_source(&state, "bytes_push_float()");
-    // hstate_exec_source(&state, "print_bytes_as_string()");
-    // hstate_exec_source(&state, "print_bytes_as_hex()");
-    // hstate_exec_source(&state, "print_int()");
-    // hstate_exec_source(&state, "print_float()");
+    for(uint32_t i = 0; i < nums.count; ++i) {
+        fprintf(stderr, "%u] %d\n", i, nums.items[i]);
+    }
 }
 

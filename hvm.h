@@ -80,7 +80,6 @@ typedef enum HVM_InstType {
     HVM_INST_ADD,
     HVM_INST_SUB,
     HVM_INST_MUL,
-    HVM_INST_CMP,
     HVM_INST_EQ,
     HVM_INST_NE,
     HVM_INST_LT,
@@ -92,11 +91,18 @@ typedef enum HVM_InstType {
     HVM_INST_FADD,
     HVM_INST_FSUB,
     HVM_INST_FMUL,
-    HVM_INST_FCMP,
+    HVM_INST_FEQ,
+    HVM_INST_FNE,
+    HVM_INST_FGT,
+    HVM_INST_FGE,
+    HVM_INST_FLT,
+    HVM_INST_FLE,
 
     HVM_INST_JMP,
     HVM_INST_JZ,
     HVM_INST_JN,
+
+    HVM_INST_DUMP,
 
     COUNT_HVM_INSTS,
 } HVM_InstType;

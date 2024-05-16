@@ -34,18 +34,23 @@ static HVM_InstInfo _inst_infos[COUNT_HVM_INSTS] = {
     [HVM_INST_GE] = { .type = HVM_INST_GE, .name = "ge", .has_operand = ut_false, .min_sp = 2, },
     [HVM_INST_LT] = { .type = HVM_INST_LT, .name = "lt", .has_operand = ut_false, .min_sp = 2, },
     [HVM_INST_LE] = { .type = HVM_INST_LE, .name = "le", .has_operand = ut_false, .min_sp = 2, },
-    [HVM_INST_CMP] = { .type = HVM_INST_CMP, .name = "cmp", .has_operand = ut_false, .min_sp = 2, },
 
     [HVM_INST_FPUSH] = { .type = HVM_INST_FPUSH, .name = "fpush", .has_operand = ut_false, .min_sp = 0, },
     [HVM_INST_FADD] = { .type = HVM_INST_FADD, .name = "fadd", .has_operand = ut_false, .min_sp = 2, },
     [HVM_INST_FSUB] = { .type = HVM_INST_FSUB, .name = "fsub", .has_operand = ut_false, .min_sp = 2, },
     [HVM_INST_FMUL] = { .type = HVM_INST_FMUL, .name = "fmul", .has_operand = ut_false, .min_sp = 2, },
-    [HVM_INST_FCMP] = { .type = HVM_INST_FCMP, .name = "fcmp", .has_operand = ut_false, .min_sp = 2, },
+    [HVM_INST_FEQ] = { .type = HVM_INST_FEQ, .name = "feq", .has_operand = ut_false, .min_sp = 2, },
+    [HVM_INST_FNE] = { .type = HVM_INST_FNE, .name = "fne", .has_operand = ut_false, .min_sp = 2, },
+    [HVM_INST_FGT] = { .type = HVM_INST_FGT, .name = "fgt", .has_operand = ut_false, .min_sp = 2, },
+    [HVM_INST_FGE] = { .type = HVM_INST_FGE, .name = "fge", .has_operand = ut_false, .min_sp = 2, },
+    [HVM_INST_FLT] = { .type = HVM_INST_FLT, .name = "flt", .has_operand = ut_false, .min_sp = 2, },
+    [HVM_INST_FLE] = { .type = HVM_INST_FLE, .name = "fle", .has_operand = ut_false, .min_sp = 2, },
 
-    [HVM_INST_JMP] = { .type = HVM_INST_JMP, .name = "jmp", .has_operand = ut_false, .min_sp = 0, },
-    [HVM_INST_JZ] = { .type = HVM_INST_JZ, .name = "jz", .has_operand = ut_false, .min_sp = 1, },
-    [HVM_INST_JN] = { .type = HVM_INST_JN, .name = "jn", .has_operand = ut_false, .min_sp = 1, },
+    [HVM_INST_JMP] = { .type = HVM_INST_JMP, .name = "jmp", .has_operand = ut_true, .min_sp = 0, },
+    [HVM_INST_JZ] = { .type = HVM_INST_JZ, .name = "jz", .has_operand = ut_true, .min_sp = 1, },
+    [HVM_INST_JN] = { .type = HVM_INST_JN, .name = "jn", .has_operand = ut_true, .min_sp = 1, },
 
+    [HVM_INST_DUMP] = { .type = HVM_INST_DUMP, .name = "dump", .has_operand = ut_false, .min_sp = 1, },
 };
 
 
@@ -217,9 +222,10 @@ HVM_Trap hvm_exec(HVM *vm, HVM_Inst inst)
                 vm->sp -= 1;
             } break;
 
-        case HVM_INST_CMP:
+        case HVM_INST_DUMP:
             {
-                HVM_Y(vm).as_i64 = HVM_Y(vm).as_i64 - HVM_X(vm).as_i64;
+                HVM_Word val = HVM_X(vm);
+                printf("HVM_Word{ .as_u64=%lu, .as_i64=%ld, .as_f64=%f }\n", val.as_u64, val.as_i64, val.as_f64);
                 vm->sp -= 1;
             } break;
         default:
@@ -242,7 +248,9 @@ void hvm_dump(const HVM *vm)
     HVM_ASSERT(vm);
     printf("VM (sp=%u, pc=%u)\n", vm->sp, vm->pc);
     for(uint32_t i = 0; i < vm->sp; ++i) {
-        printf("    [0x%X] int(%ld)|float(%f)\n", i, vm->stack[i].as_i64, vm->stack[i].as_f64);
+        const HVM_Word val = vm->stack[i];
+        printf("    [0x%X] HVM_Word{ .as_u64=%lu, .as_i64=%ld, .as_f64=%f }\n", 
+                i, val.as_u64, val.as_i64, val.as_f64);
     }
 }
 
@@ -278,9 +286,11 @@ void hvm_module_dump(const HVM_Module module)
     for(uint32_t i = 0; i < module.count; ++i) {
         inst = module.items[i];
         info = _inst_infos[inst.type];
-        printf("0x%X %s(int(%ld)|float(%f)\n", i, info.name, 
+        printf("%u %s(HVM_Word{ .as_u64=%lu, .as_i64=%ld, .as_f64=%f})\n", i, info.name, 
+                info.has_operand ? inst.op.as_u64 : 0,
                 info.has_operand ? inst.op.as_i64 : 0,
-                info.has_operand ? inst.op.as_f64 : 0.0);
+                info.has_operand ? inst.op.as_f64 : 0.0
+                );
     }
 }
 
@@ -395,7 +405,6 @@ ut_bool hvm_module_load_from_file(HVM_Module *module, const char *file_path, Are
         hvm_module_append(module, inst);
     }
     buffer_append_with_arena(&module->static_data, static_data_buffer.data, static_data_buffer.count, a);
-
     arena_free(&local);
     return ut_true;
 }

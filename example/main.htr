@@ -1,8 +1,8 @@
 var hello = 34;
 var world = 35;
-
 hello = hello + world;
-world = 0;
-while(world < 100) {
-    world = world + 1;
+if(hello == 69) {
+    dump 420;
+} else {
+    dump 69;
 }

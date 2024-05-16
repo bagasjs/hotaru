@@ -177,6 +177,21 @@ hResult hstate_exec_expr(hState *state, const hExpr *expr)
     return HRES_OK;
 }
 
+hResult hstate_compile_block(hState *state, const hBlock block)
+{
+    hvm_module_append(&state->mod, HVM_MAKE_INST(
+                HVM_INST_BEGIN_SCOPE,
+                HVM_NULL_WORD));
+
+    for(uint32_t i = 0; i < block.count; ++i) {
+        hstate_compile_stmt(state, &block.items[i]);
+    }
+
+    hvm_module_append(&state->mod, HVM_MAKE_INST(
+                HVM_INST_END_SCOPE,
+                HVM_NULL_WORD));
+    return HRES_OK;
+}
 
 hResult hstate_compile_stmt(hState *state, const hStmt *stmt)
 {
@@ -208,6 +223,41 @@ hResult hstate_compile_stmt(hState *state, const hStmt *stmt)
                 hvm_module_append(&state->mod, HVM_MAKE_INST(
                             HVM_INST_POP,
                             HVM_NULL_WORD));
+            } break;
+        case HSTMT_IF:
+            {
+                // HACK: (1) first we jump to the start of if's condition
+                hvm_module_append(&state->mod, HVM_MAKE_INST(
+                            HVM_INST_JMP,
+                            HVM_WORD_U64(state->mod.count + 2)));
+                // HACK: (2) we will jump here if body of a condition is done
+                uint32_t body_completed_jump_target = state->mod.count;
+                hvm_module_append(&state->mod, HVM_MAKE_INST(
+                            HVM_INST_JMP,
+                            HVM_NULL_WORD));
+                HVM_Inst *inst = &state->mod.items[body_completed_jump_target];
+
+                HVM_Module prev_mod = state->mod;
+                hvm_module_init(&state->mod);
+                hstate_compile_expr(state, &stmt->as._if.condition);
+                hstate_compile_block(state, stmt->as._if.body);
+                hvm_module_append(&state->mod, HVM_MAKE_INST(
+                            HVM_INST_JMP,
+                            HVM_WORD_U64(body_completed_jump_target)));
+                for(uint32_t i =  0; i < stmt->as._if._elif.count; ++i) {
+                    hElifBlock elif = stmt->as._if._elif.items[i];
+                    hstate_compile_expr(state, &elif.condition);
+                    hstate_compile_block(state, elif.body);
+                    hvm_module_append(&state->mod, HVM_MAKE_INST(
+                                HVM_INST_JMP,
+                                HVM_WORD_U64(body_completed_jump_target)));
+                }
+                hstate_compile_block(state, stmt->as._if._else);
+                for(uint32_t i = 0; i < state->mod.count; ++i) 
+                    hvm_module_append(&prev_mod, state->mod.items[i]);
+                inst->op = HVM_WORD_U64(prev_mod.count);
+                hvm_module_deinit(&state->mod);
+                state->mod = prev_mod;
             } break;
         case HSTMT_WHILE:
             {
@@ -247,9 +297,19 @@ hResult hstate_compile_stmt(hState *state, const hStmt *stmt)
                 }
                 hvm_module_deinit(&body_mod);
             } break;
+
+        case HSTMT_DUMP:
+            {
+                hResult res = hstate_compile_expr(state, &stmt->as.dump);
+                if(res != HRES_OK) return res;
+
+                hvm_module_append(&state->mod, HVM_MAKE_INST(
+                            HVM_INST_DUMP,
+                            HVM_NULL_WORD));
+            } break;
         default:
             {
-                UT_ASSERT(0 && "Unreachable stmt in hstate_exec_stmt()");
+                UT_ASSERT(0 && "Unreachable stmt");
             } break;
     }
 
@@ -289,7 +349,9 @@ hResult hstate_exec_stmt(hState *state, const hStmt *stmt)
                 inst.type = HVM_INST_POP;
                 hvm_exec(&state->vm, inst);
             } break;
+
         case HSTMT_WHILE:
+        case HSTMT_IF:
             {
                 hvm_module_init(&state->mod);
                 state->mod.count = 0;
@@ -300,8 +362,19 @@ hResult hstate_exec_stmt(hState *state, const hStmt *stmt)
                 uint32_t last_pc = state->vm.pc;
                 state->vm.pc = 0;
                 hvm_exec_module(&state->vm, state->mod);
+                state->vm.halt = ut_false;
                 state->vm.pc = last_pc;
                 hvm_module_deinit(&state->mod);
+            } break;
+
+        case HSTMT_DUMP:
+            {
+                hResult res = hstate_exec_expr(state, &stmt->as.dump);
+                if(res != HRES_OK) return res;
+
+                hvm_exec(&state->vm, HVM_MAKE_INST(
+                            HVM_INST_DUMP,
+                            HVM_NULL_WORD));
             } break;
         default:
             {

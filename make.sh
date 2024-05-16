@@ -24,6 +24,5 @@ $CC $CORE_CFLAGS $DEBUG_CFLAGS -o $BUILD_DIR/hotaru "${LIBS[@]}" ./main.c
 echo "Building $BUILD_DIR/test"
 $CC $CORE_CFLAGS $DEBUG_CFLAGS -o $BUILD_DIR/test "${LIBS[@]}" ./test.c
 
-
 echo "Building $BUILD_DIR/hvm"
 $CC $CORE_CFLAGS -Os -o $BUILD_DIR/hvm ./hvmmain.c ./hvm.c ./utils.c

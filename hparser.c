@@ -34,8 +34,11 @@ typedef enum hTokenType {
     HTOKEN_WHILE,
     HTOKEN_BREAK,
     HTOKEN_CONTINUE,
-    HTOKEN_DEBUG_DUMP,
+    HTOKEN_IF,
+    HTOKEN_ELSE,
+    HTOKEN_ELIF,
 
+    HTOKEN_DUMP,
     COUNT_HTOKENS,
 } hTokenType;
 
@@ -71,7 +74,10 @@ static hTokenInfo _token_infos[COUNT_HTOKENS] = {
     [HTOKEN_WHILE] = { .view = "while", .is_binop = ut_false, },
     [HTOKEN_BREAK] = { .view = "break", .is_binop = ut_false, },
     [HTOKEN_CONTINUE] = { .view = "continue", .is_binop = ut_false, },
-    [HTOKEN_DEBUG_DUMP] = { .view = "dd", .is_binop = ut_false, },
+    [HTOKEN_IF] = { .view = "if", .is_binop = ut_false, },
+    [HTOKEN_ELSE] = { .view = "else", .is_binop = ut_false, },
+    [HTOKEN_ELIF] = { .view = "elif", .is_binop = ut_false, },
+    [HTOKEN_DUMP] = { .view = "dump", .is_binop = ut_false, },
 };
 
 typedef struct hToken {
@@ -270,6 +276,14 @@ ut_bool hlexer_cache_next(hLexer *lex)
                         hlexer_cache_extend(lex, HTOKEN_BREAK, name);
                     } else if(sv_eq(name, SV("continue"))) {
                         hlexer_cache_extend(lex, HTOKEN_CONTINUE, name);
+                    } else if(sv_eq(name, SV("if"))) {
+                        hlexer_cache_extend(lex, HTOKEN_IF, name);
+                    } else if(sv_eq(name, SV("else"))) {
+                        hlexer_cache_extend(lex, HTOKEN_ELSE, name);
+                    } else if(sv_eq(name, SV("elif"))) {
+                        hlexer_cache_extend(lex, HTOKEN_ELIF, name);
+                    } else if(sv_eq(name, SV("dump"))) {
+                        hlexer_cache_extend(lex, HTOKEN_DUMP, name);
                     } else {
                         hlexer_cache_extend(lex, HTOKEN_IDENTIFIER, name);
                     }
@@ -433,7 +447,7 @@ hStmt hparse_stmt(Arena *a, hLexer *lex)
     hStmt res = {0};
     ut_memset(&res, 0, sizeof(res));
 
-    if(!hlexer_peek(lex, &token, 0)) {
+    if(!hlexer_next(lex, &token)) {
         res.type = HSTMT_NONE;
         return res;
     }
@@ -441,7 +455,6 @@ hStmt hparse_stmt(Arena *a, hLexer *lex)
     switch(token.type) {
         case HTOKEN_VAR:
             {
-                token = hlexer_expect_token(lex, HTOKEN_VAR);
                 StringView name = hlexer_expect_token(lex, HTOKEN_IDENTIFIER).literal;
                 hlexer_expect_token(lex, HTOKEN_ASSIGN);
 
@@ -452,7 +465,6 @@ hStmt hparse_stmt(Arena *a, hLexer *lex)
             } break;
         case HTOKEN_IDENTIFIER:
             {
-                token = hlexer_expect_token(lex, HTOKEN_IDENTIFIER);
                 hToken ntok;
                 hlexer_next(lex, &ntok);
                 if(ntok.type == HTOKEN_ASSIGN) {
@@ -464,12 +476,42 @@ hStmt hparse_stmt(Arena *a, hLexer *lex)
             } break;
         case HTOKEN_WHILE:
             {
-                token = hlexer_expect_token(lex, HTOKEN_WHILE);
                 res.type = HSTMT_WHILE;
                 hlexer_expect_token(lex, HTOKEN_LPAREN);
                 res.as._while.condition = hparse_expr(a, lex);
                 hlexer_expect_token(lex, HTOKEN_RPAREN);
                 res.as._while.body = hparse_block(a, lex);
+            } break;
+        case HTOKEN_IF:
+            {
+                res.type = HSTMT_IF;
+                hlexer_expect_token(lex, HTOKEN_LPAREN);
+                res.as._if.condition = hparse_expr(a, lex);
+                hlexer_expect_token(lex, HTOKEN_RPAREN);
+                res.as._if.body = hparse_block(a, lex);
+                while(hlexer_peek(lex, &token, 0) && token.type == HTOKEN_ELSE) {
+                    hlexer_next(lex, &token);
+                    if(!hlexer_peek(lex, &token, 0)) {
+                        hlog_message(HLOG_FATAL, "Expecting something after `else` keyword\n");
+                    }
+                    if(hlexer_peek(lex, &token, 0) && token.type == HTOKEN_IF) {
+                        hElifBlock elif;
+                        hlexer_expect_token(lex, HTOKEN_LPAREN);
+                        elif.condition = hparse_expr(a, lex);
+                        hlexer_expect_token(lex, HTOKEN_RPAREN);
+                        elif.body = hparse_block(a, lex);
+                        arena_da_append(a, &res.as._if._elif, elif);
+                    } else {
+                        res.as._if._else = hparse_block(a, lex);
+                        break;
+                    }
+                }
+            } break;
+        case HTOKEN_DUMP:
+            {
+                res.type = HSTMT_DUMP;
+                res.as.dump = hparse_expr(a, lex);
+                hlexer_expect_token(lex, HTOKEN_SEMICOLON);
             } break;
         default:
             {
@@ -519,6 +561,9 @@ hBlock hparse_block(Arena *a, hLexer *lex)
 
 hResult hstate_exec_source(hState *state, const char *source)
 {
+    UT_ASSERT(state);
+    UT_ASSERT(source);
+
     hLexer lex;
     Arena a;
     ut_memset(&a, 0, sizeof(a));
@@ -528,13 +573,7 @@ hResult hstate_exec_source(hState *state, const char *source)
         hstate_exec_stmt(state, &stmt);
         stmt = hparse_stmt(&a, &lex);
     }
-    return HRES_OK;
-}
-
-hResult hstate_exec_file(hState *state, const char *filepath)
-{
-    UT_UNUSED(state);
-    UT_UNUSED(filepath);
+    arena_free(&a);
     return HRES_OK;
 }
 
@@ -547,11 +586,13 @@ hResult hstate_compile_source(hState *state, const char *source)
     Arena a;
     ut_memset(&a, 0, sizeof(a));
     hlexer_init(&lex, source);
-    hStmt stmt = {0};
-    do {
-        hStmt stmt = hparse_stmt(&a, &lex);
+    hStmt stmt = hparse_stmt(&a, &lex);
+    while(stmt.type != HSTMT_NONE) {
         hstate_compile_stmt(state, &stmt);
-    } while(stmt.type != HSTMT_NONE);
+        stmt = hparse_stmt(&a, &lex);
+    }
+    hvm_module_append(&state->mod, HVM_MAKE_INST(
+                HVM_INST_HALT, HVM_WORD_U64(0)));
     arena_free(&a);
     return HRES_OK;
 }
