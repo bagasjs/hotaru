@@ -84,6 +84,7 @@ typedef enum hStmtType {
     HSTMT_VAR_ASSIGN,
     HSTMT_WHILE,
     HSTMT_IF,
+    HSTMT_FUNC_DEF,
 
     HSTMT_DUMP,
 } hStmtType;
@@ -105,6 +106,10 @@ typedef struct hElifBlock {
     hExpr condition;
     hBlock body;
 } hElifBlock;
+
+typedef struct hFuncDef {
+    hBlock body;
+} hFuncDef;
 
 typedef struct hIfStmt {
     hPosition pos;
